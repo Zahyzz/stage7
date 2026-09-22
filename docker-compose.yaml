@@ -1,0 +1,42 @@
+services:
+  chromadb:
+    image: chromadb/chroma
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+
+  backend:
+    image: ${DOCKERHUB_NAMESPACE}/stage7-backend:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    depends_on:
+      chromadb:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/openapi.json > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - ./chat_logs:/app/chat_logs
+      - ./pdf_store:/app/pdf_store
+
+  chatbot:
+    image: ${DOCKERHUB_NAMESPACE}/stage7-chatbot:latest
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:5000
+    ports:
+      - "8501:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  chromadb_data:
